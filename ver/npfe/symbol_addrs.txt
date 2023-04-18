@@ -1,0 +1,5 @@
+loadCompressedData = 0x8000350C;
+decompress = 0x800034c4;
+setDecompressionAddrs = 0x8000345c;
+decompressVPK0 = 0x80002c94;
+loadOverlay = 0x80002c20;

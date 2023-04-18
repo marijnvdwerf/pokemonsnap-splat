@@ -1,0 +1,17 @@
+.mypy_cache/
+__pycache__/
+temp/
+
+ver/*/asm/
+ver/*/assets/
+ver/*/src/
+ver/*/baserom.z64
+ver/*/generated.yaml
+ver/*/pokemonsnap.ld
+ver/*/pokemonsnap.yaml
+ver/*/undefined_funcs_auto.txt
+ver/*/undefined_syms_auto.txt
+ver/*/out.html
+
+aifc_decode
+aifc_decode.c
