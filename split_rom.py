@@ -207,9 +207,9 @@ def split(data: bytes, version: str):
         overlays.append(dmaWrapper(0xAD1640, 0xADD310))
 
         # VPK0 stuff
-        overlays.append(vpk0(0xA0F830, 0x802B5000, 0x4D416 / 0x10))
-        overlays.append(vpk0(0xAA0B80, 0x802B5000, 0xD53 / 0x10))
-        overlays.append(vpk0(0xAAA610, 0x80200000, 0x4B / 0x10))
+        overlays.append(vpk0(0xA0F830, 0x802B5000, 0x4D416))
+        overlays.append(vpk0(0xAA0B80, 0x802B5000, 0xD53))
+        overlays.append(vpk0(0xAAA610, 0x80200000, 0x4B))
 
         # From 0x800423e4
         overlays.append(dmaWrapper(0xBA6C20, 0xBB6940, "music-1"))
