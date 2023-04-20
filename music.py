@@ -62,6 +62,9 @@ class ALWaveTable:
     type: U8
     flags: U8
 
+    book: ALADPCMBook | None
+    loop: ALADPCMloop | None
+
     @staticmethod
     def unpack_from(buffer, offset):
         format = f">{u32}{s32}4{u8}"
@@ -232,6 +235,57 @@ class ALBankFile:
         return file
 
 
+def convert_sound(sound: ALSound, path: Path):
+    aifc_path = path / f"sound-{sound.wavetable.base:X}.aifc"
+    aiff_path = path / f"sound-{sound.wavetable.base:X}.aiff"
+    file = open(
+        aifc_path,
+        "wb",
+    )
+    tbl_file.seek(sound.wavetable.base)
+    data = tbl_file.read(sound.wavetable.len)
+
+    writer = AifcWriter(file)
+
+    num_channels = 1
+    num_frames = 1
+    num_frames = len(data) * 16 // 9
+    sample_size = 16  # bits per sample
+    sample_rate = 22050  # No idea where this comes from
+    comm = struct.pack(">hIh", num_channels, num_frames, sample_size)
+    comm += serialize_f80(sample_rate)
+    comm += b"VAPC"
+    b = pstring(b"VADPCM ~4-1")
+    comm += b
+    writer.add_section(b"COMM", comm)
+
+    #
+    # # INST
+    # inst = b"\0" * 20
+    # file.write(b"INST" + struct.pack(">I", len(inst)) + inst)
+    #
+    # # VADPCMCODES
+    assert sound.wavetable.book is not None
+    vrapcmcodes = struct.pack(
+        ">hhh", 1, sound.wavetable.book.order, sound.wavetable.book.npredictors
+    ) + b"".join(struct.pack(">h", x) for x in sound.wavetable.book.book)
+    writer.add_custom_section(b"VADPCMCODES", vrapcmcodes)
+
+    # SSND
+    ssnd = struct.pack(">II", 0, 0) + data
+    writer.add_section(b"SSND", ssnd)
+
+    writer.finish()
+
+    p = subprocess.run(["./aifc_decode", str(aifc_path), str(aiff_path)])
+    if p.returncode == 0:
+        aifc_path.unlink()
+        pass
+    else:
+        rich.pretty.pprint(sound)
+        aiff_path.unlink(missing_ok=True)
+
+
 def process_pair(ctl_file: BinaryIO, tbl_file: BinaryIO, path: Path):
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
@@ -253,53 +307,7 @@ def process_pair(ctl_file: BinaryIO, tbl_file: BinaryIO, path: Path):
 
     sounds.sort(key=lambda sound: sound.wavetable.base)
     for sound in sounds:
-        aifc_path = path / f"sound-{sound.wavetable.base:X}.aifc"
-        aiff_path = path / f"sound-{sound.wavetable.base:X}.aiff"
-        file = open(
-            aifc_path,
-            "wb",
-        )
-        tbl_file.seek(sound.wavetable.base)
-        data = tbl_file.read(sound.wavetable.len)
-
-        writer = AifcWriter(file)
-
-        num_channels = 1
-        num_frames = 1
-        num_frames = len(data) * 16 // 9
-        sample_size = 16  # bits per sample
-        sample_rate = 22050  # No idea where this comes from
-        comm = struct.pack(">hIh", num_channels, num_frames, sample_size)
-        comm += serialize_f80(sample_rate)
-        comm += b"VAPC"
-        b = pstring(b"VADPCM ~4-1")
-        comm += b
-        writer.add_section(b"COMM", comm)
-
-        #
-        # # INST
-        # inst = b"\0" * 20
-        # file.write(b"INST" + struct.pack(">I", len(inst)) + inst)
-        #
-        # # VADPCMCODES
-        vrapcmcodes = struct.pack(
-            ">hhh", 1, sound.wavetable.book.order, sound.wavetable.book.npredictors
-        ) + b"".join(struct.pack(">h", x) for x in sound.wavetable.book.book)
-        writer.add_custom_section(b"VADPCMCODES", vrapcmcodes)
-
-        # SSND
-        ssnd = struct.pack(">II", 0, 0) + data
-        writer.add_section(b"SSND", ssnd)
-
-        writer.finish()
-
-        p = subprocess.run(["./aifc_decode", str(aifc_path), str(aiff_path)])
-        if p.returncode == 0:
-            aifc_path.unlink()
-            pass
-        else:
-            rich.pretty.pprint(sound)
-            aiff_path.unlink(missing_ok=True)
+        convert_sound(sound, path)
 
 
 if __name__ == "__main__":
