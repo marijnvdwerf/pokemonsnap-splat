@@ -1,4 +1,11 @@
 import struct
+from dataclasses import dataclass
+from typing import Any, List, Sequence
+
+long = s32 = ">i"
+unsigned_long = u32 = ">I"
+short = s16 = ">h"
+unsigned_short = u16 = ">H"
 
 
 def pstring(data: bytes):
@@ -31,35 +38,90 @@ def align(val, al):
     return (val + (al - 1)) & -al
 
 
-class AifcWriter:
-    """
-    Retrieved from https://github.com/n64decomp/sm64/blob/master/tools/disassemble_sound.py
-    """
+class FormAIFCChunk:
+    chunks: List[Any]
 
-    def __init__(self, out):
-        self.out = out
-        self.sections = []
-        self.total_size = 0
+    def __init__(self) -> None:
+        super().__init__()
+        self.chunks = []
 
-    def add_section(self, tp, data):
-        assert isinstance(tp, bytes)
-        assert isinstance(data, bytes)
-        self.sections.append((tp, data))
-        self.total_size += align(len(data), 2) + 8
+    def serialize(self):
+        blocks = bytearray()
+        blocks += b"AIFC"
+        for chunk in self.chunks:
+            blocks += chunk.serialize()
 
-    def add_custom_section(self, tp, data):
-        self.add_section(b"APPL", b"stoc" + self.pstring(tp) + data)
+        header = bytearray()
+        header += b"FORM"
+        header += struct.pack(long, len(blocks))
+        return bytes(header + blocks)
 
-    def pstring(self, data):
-        return bytes([len(data)]) + data + (b"" if len(data) % 2 else b"\0")
 
-    def finish(self):
-        # total_size isn't used, and is regularly wrong. In particular, vadpcm_enc
-        # preserves the size of the input file...
-        self.total_size += 4
-        self.out.write(b"FORM" + struct.pack(">I", self.total_size) + b"AIFC")
-        for (tp, data) in self.sections:
-            self.out.write(tp + struct.pack(">I", len(data)))
-            self.out.write(data)
-            if len(data) % 2:
-                self.out.write(b"\0")
+@dataclass
+class CommonChunk:
+    num_channels: int  # audio channels */
+    num_frames: int  # sample frames = samples/channel */
+    sample_size: int  # bits/sample */
+    sample_rate: int
+    compression_type: bytes | str
+    compression_string: bytes | str
+
+    def serialize(self):
+        data = bytearray()
+        data += struct.pack(short, self.num_channels)
+        data += struct.pack(unsigned_long, self.num_frames)
+        data += struct.pack(short, self.sample_size)
+        data += serialize_f80(self.sample_rate)
+        data += bytes(self.compression_type)
+        data += pstring(self.compression_string)
+
+        header = bytearray()
+        header += b"COMM"
+        header += struct.pack(long, len(data))
+
+        return header + data
+
+
+@dataclass
+class SoundDataChunk:
+    offset: int
+    block_size: int
+    soundData: bytes
+
+    def serialize(self):
+        data = bytearray()
+        data += struct.pack(unsigned_long, self.offset)
+        data += struct.pack(unsigned_long, self.block_size)
+        data += self.soundData
+
+        header = bytearray()
+        header += b"SSND"
+        header += struct.pack(long, len(data))
+
+        return header + data + (b"" if len(data) % 2 == 0 else b"\0")
+
+
+@dataclass
+class VadpcmCodesChunk:
+    version = 1
+    order: int
+    nEntries: int
+    tableData: Sequence[int]
+
+    def serialize(self):
+        data = bytearray()
+        data += b"stoc"
+        data += pstring(b"VADPCMCODES")
+        data += struct.pack(u16, self.version)
+        data += struct.pack(s16, self.order)
+        data += struct.pack(u16, self.nEntries)
+
+        table_data = b"".join(struct.pack(">h", x) for x in self.tableData)
+        assert len(table_data) == (self.order * self.nEntries * 16)
+        data += table_data
+
+        header = bytearray()
+        header += b"APPL"
+        header += struct.pack(long, len(data))
+
+        return header + data
