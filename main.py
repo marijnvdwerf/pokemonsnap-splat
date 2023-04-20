@@ -105,11 +105,11 @@ if __name__ == "__main__":
         # spimdisasm.common.GlobalConfig.IGNORE_WORD_LIST.add(0x80)
 
         if 1:
-            args = split.parser.parse_args(["pokemonsnap.yaml"])
+            splat_args = split.parser.parse_args(["pokemonsnap.yaml"])
             split.main(
-                args.config,
-                args.modes,
-                args.verbose,
-                args.use_cache,
-                args.skip_version_check,
+                splat_args.config,
+                splat_args.modes,
+                splat_args.verbose,
+                splat_args.use_cache,
+                splat_args.skip_version_check,
             )
